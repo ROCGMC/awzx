@@ -1,101 +1,290 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
+<!doctype html>
+<html lang="zh-TW" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NSB Secure Terminal</title>
-    <link rel="manifest" href="manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0a0a0a">
+
+    <title>NSB Messenger</title>
+
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+
     <style>
-        body { background: #000; color: #00ff00; font-family: "Courier New", monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
-        .logo { width: 120px; margin-bottom: 20px; }
-        .login-box { text-align: center; width: 80%; max-width: 300px; }
-        input { background: transparent; border: 1px solid #00ff00; color: #00ff00; width: 100%; padding: 10px; margin: 5px 0; text-align: center; font-size: 16px; outline: none; border-radius: 0; }
-        .btn { border: 1px solid #00ff00; padding: 10px 20px; margin-top: 15px; cursor: pointer; background: rgba(0,255,0,0.1); }
-        #timer { color: #ff0000; font-size: 1.2em; margin-top: 10px; }
-        
-        /* 緊急模式樣式 */
-        #emergency-ui { 
-            display: none; 
-            background: #8B0000; 
-            color: white; 
-            width: 100vw; 
-            height: 100vh; 
-            position: fixed; 
-            top: 0; 
-            left: 0; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            text-align: center; 
-            padding: 20px; 
-            z-index: 999;
-            animation: blink 0.5s infinite; 
+        * { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .font-digital { font-family: 'Orbitron', monospace; }
+
+        html, body { 
+            overscroll-behavior-y: none; 
+            overflow: hidden; 
+            height: 100%; 
+            background-color: #000; 
+            margin: 0; 
         }
-        @keyframes blink { 0% { background: #8B0000; } 50% { background: #ff0000; } 100% { background: #8B0000; } }
+
+        .glass-dark { background: rgba(20, 20, 20, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(34, 197, 94, 0.2); }
+        .btn-green { background: #15803d; color: white; transition: all 0.2s; }
+        .btn-green:active { transform: scale(0.95); background: #166534; }
+
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        .input-error { border-color: #ef4444 !important; animation: shake 0.2s ease-in-out 2; }
+
+        .scrollable { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .chat-bubble { max-width: 85%; padding: 10px 14px; border-radius: 18px; font-size: 15px; margin-bottom: 12px; line-height: 1.4; }
+        .chat-receive { background: #262626; color: #e5e5e5; align-self: flex-start; border-bottom-left-radius: 4px; }
+        .chat-send { background: #15803d; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        
+        .type-income { color: #4ade80; border: 1px solid #4ade80; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+        .type-expense { color: #f87171; border: 1px solid #f87171; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
     </style>
 </head>
-<body>
+<body class="flex flex-col text-gray-200">
 
-    <div id="login-ui" class="login-box">
-        <img src="https://upload.wikimedia.org/wikipedia/zh/2/24/ROC_National_Security_Bureau_Seal.svg" class="logo">
-        <div style="margin-bottom: 10px; font-weight: bold;">國家安全局行動終端</div>
-        <input type="text" id="user-id" placeholder="身分碼 (ID)" inputmode="numeric">
-        <input type="password" id="auth-code" placeholder="驗證碼 (OTP)" inputmode="numeric">
-        <div class="btn" onclick="checkAuth()">驗證身份</div>
-        <div id="timer">授權剩餘時間: <span id="sec">60</span>s</div>
+    <div id="auth-screen" class="absolute inset-0 z-[100] flex flex-col items-center justify-center p-8 bg-black">
+        <div class="w-full max-w-xs text-center">
+            <img src="https://upload.wikimedia.org/wikipedia/zh/2/24/ROC_National_Security_Bureau_Seal.svg" class="w-20 h-20 mx-auto mb-6 opacity-80">
+            <h1 class="text-green-500 font-bold tracking-widest mb-8 text-sm">國家安全局-行動通訊終端</h1>
+            <div class="space-y-4">
+                <input type="password" id="auth-code" inputmode="numeric" maxlength="6" 
+                    class="w-full bg-neutral-900 border border-neutral-800 rounded-xl py-4 text-center text-2xl font-digital tracking-[0.5em] text-green-500 focus:outline-none focus:border-green-600" 
+                    placeholder="身分識別碼">
+                <p id="error-hint" class="text-red-500 text-xs h-4 opacity-0 transition-opacity">身分錯誤，剩餘 <span id="retry-count">3</span> 次嘗試</p>
+                <button id="auth-btn" class="w-full btn-green py-4 rounded-xl font-bold text-lg">進入系統</button>
+            </div>
+        </div>
     </div>
 
-    <div id="emergency-ui">
-        <h1>⚠️ 警告 ⚠️</h1>
-        <p style="font-size: 1.5em; font-weight: bold;">偵測到非法存取</p>
-        <hr style="width: 80%; border: 0.5px solid white;">
-        <p>生物特徵識別已上傳至雲端</p>
-        <p>高精度 GPS 追蹤模式已啟動</p>
-        <p>本設備已被遠端鎖定</p>
-        <p style="font-size: 0.8em; margin-top: 50px; opacity: 0.8;">正在回傳位置至國安局情蒐中心...</p>
+    <div id="chat-app" class="hidden h-full flex flex-col bg-black">
+        <header class="p-4 border-b border-neutral-800 flex justify-between items-center bg-neutral-900/50">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center text-green-500 font-bold">NS</div>
+                <div><p class="font-bold text-sm">通訊頻道 7359</p><p class="text-[10px] text-green-600">● 終端加密在線</p></div>
+            </div>
+            <button onclick="location.reload()" class="text-xs text-neutral-500">登出</button>
+        </header>
+        <div id="chat-content" class="flex-1 p-4 flex flex-col scrollable">
+            <div class="text-[11px] text-neutral-600 text-center my-4 tracking-widest font-digital">CONNECT_STABLE_09:41</div>
+            <div class="chat-bubble chat-receive">系統訊息：身分驗證成功，歡迎回到指揮中心。</div>
+        </div>
+        <div class="p-4 bg-neutral-900 flex gap-2">
+            <input type="text" id="chat-input" class="flex-1 bg-black border border-neutral-800 rounded-full px-4 py-2 text-sm focus:outline-none" placeholder="輸入訊息...">
+            <button id="chat-send" class="w-10 h-10 bg-green-700 rounded-full flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden h-full flex flex-col bg-neutral-950">
+        <header class="p-4 glass-dark flex justify-between items-center">
+            <h1 class="text-green-500 font-bold font-digital italic">ASSET_DATABASE</h1>
+            <button id="close-asset" class="text-xs border border-green-900 px-3 py-1 rounded-full text-green-700">返回通訊</button>
+        </header>
+
+        <div class="flex-1 scrollable p-4">
+            <div class="glass-dark rounded-2xl p-6 text-center mb-4">
+                <p class="text-[10px] text-green-800 uppercase tracking-widest mb-1">Current Cash Total</p>
+                <p id="total-balance" class="text-3xl font-digital font-bold text-green-400">NT$ 0</p>
+            </div>
+
+            <div class="flex gap-1 mb-4 bg-neutral-900 p-1 rounded-xl">
+                <button id="tab-wallet" class="flex-1 py-2 rounded-lg text-xs transition-all">資產清單</button>
+                <button id="tab-log" class="flex-1 py-2 rounded-lg text-xs transition-all">收支紀錄</button>
+                <button id="tab-deposit" class="flex-1 py-2 rounded-lg text-xs transition-all">數據錄入</button>
+            </div>
+
+            <div id="wallet-view">
+                <div id="wallet-list" class="space-y-3"></div>
+                <div id="empty-state" class="text-center py-10 text-neutral-800">NO_DATA_ENTRY</div>
+            </div>
+
+            <div id="log-view" class="hidden space-y-4">
+                <div class="glass-dark rounded-xl p-4 space-y-3">
+                    <div class="flex gap-2">
+                        <button id="btn-type-income" class="flex-1 py-2 rounded border border-green-500 text-green-500 text-xs bg-green-900/20">收入</button>
+                        <button id="btn-type-expense" class="flex-1 py-2 rounded border border-neutral-700 text-neutral-500 text-xs">支出</button>
+                    </div>
+                    <input type="number" id="log-amount" class="w-full bg-black border border-neutral-800 rounded p-3 text-green-400 font-digital" placeholder="輸入金額">
+                    <input type="text" id="log-reason" class="w-full bg-black border border-neutral-800 rounded p-3 text-sm" placeholder="收支原因 (例如: 買午餐)">
+                    <button id="log-save-btn" class="w-full btn-green py-3 rounded-lg font-bold text-sm">存檔紀錄 (不改動現金總額)</button>
+                </div>
+                <div id="log-list" class="space-y-2 border-t border-neutral-800 pt-4"></div>
+            </div>
+
+            <div id="deposit-view" class="hidden">
+                <div class="glass-dark rounded-xl p-6 space-y-4">
+                    <p class="text-[10px] text-neutral-500 uppercase tracking-widest">Manual Data Entry</p>
+                    <div class="space-y-2">
+                        <label class="text-[10px] text-green-900 ml-1">資產變動金額</label>
+                        <input type="number" id="manual-amount" class="w-full bg-black border border-neutral-800 rounded-lg p-4 text-green-500 font-digital text-2xl focus:border-green-600 focus:outline-none" placeholder="0">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-[10px] text-green-900 ml-1">資產標籤 / 備註</label>
+                        <input type="text" id="notes" class="w-full bg-black border border-neutral-800 rounded-lg p-4 text-sm text-green-500 focus:border-green-600 focus:outline-none" placeholder="例如: 獎金、備用金...">
+                    </div>
+                    <button id="deposit-btn" class="w-full btn-green py-4 rounded-xl font-bold mt-2">執行資產更新程序</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="emergency-screen" class="hidden fixed inset-0 z-[200] bg-red-950 flex flex-col items-center justify-center p-8 text-center text-red-500 font-mono">
+        <div class="text-7xl mb-6">⚠️</div>
+        <h1 class="text-2xl font-bold text-white mb-2 tracking-tighter">TERMINAL_LOCKED</h1>
+        <div id="client-ip" class="text-lg font-bold">FETCHING_IP...</div>
     </div>
 
     <script>
-        let timeLeft = 60;
-        let isEmergency = false;
+        let walletData = JSON.parse(localStorage.getItem('nsb_assets') || '[]');
+        let financialLogs = JSON.parse(localStorage.getItem('nsb_logs') || '[]');
+        let currentLogType = '收入';
+        let errorCount = 0;
 
-        // 啟動 60 秒倒數
-        const countdown = setInterval(() => {
-            if (isEmergency) return;
-            timeLeft--;
-            document.getElementById('sec').innerText = timeLeft;
-            if (timeLeft <= 0) {
-                triggerEmergency();
-            }
-        }, 1000);
+        document.addEventListener('touchmove', e => { if (!e.target.closest('.scrollable')) e.preventDefault(); }, { passive: false });
 
-        function checkAuth() {
-            const userId = document.getElementById('user-id').value;
-            const authCode = document.getElementById('auth-code').value;
-
-            // 驗證碼邏輯
-            if (userId === "981103" && authCode === "990420") {
-                clearInterval(countdown);
-                alert("身份驗證成功，系統已解除鎖定。");
-                // 驗證成功後，你可以選擇跳轉到一個假的主畫面或關閉視窗
-            } else {
-                alert("驗證失敗：無效的身分憑證。");
-            }
+        async function fetchIP() {
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                document.getElementById('client-ip').textContent = "SOURCE_IP: " + data.ip;
+            } catch (e) { document.getElementById('client-ip').textContent = "SOURCE_IP: 103.24.XX.XX"; }
         }
 
-        function triggerEmergency() {
-            isEmergency = true;
-            clearInterval(countdown);
-            document.getElementById('login-ui').style.display = 'none';
-            document.getElementById('emergency-ui').style.display = 'flex';
+        function init() {
+            document.getElementById('auth-btn').onclick = () => {
+                const val = document.getElementById('auth-code').value;
+                if(val === '981103' || val === '990420') {
+                    document.getElementById('auth-screen').classList.add('hidden');
+                    document.getElementById('chat-app').classList.remove('hidden');
+                } else {
+                    errorCount++;
+                    document.getElementById('error-hint').style.opacity = '1';
+                    document.getElementById('retry-count').textContent = 3 - errorCount;
+                    if(errorCount >= 3) {
+                        document.getElementById('auth-screen').classList.add('hidden');
+                        document.getElementById('emergency-screen').classList.remove('hidden');
+                        fetchIP();
+                    }
+                }
+            };
+
+            const handleChat = () => {
+                const inp = document.getElementById('chat-input');
+                if(inp.value.trim() === '/a') {
+                    document.getElementById('chat-app').classList.add('hidden');
+                    document.getElementById('main-app').classList.remove('hidden');
+                    renderAll();
+                    switchTab('wallet');
+                } else if(inp.value !== "") {
+                    document.getElementById('chat-content').innerHTML += `<div class="chat-bubble chat-send">${inp.value}</div>`;
+                    inp.value = '';
+                }
+            };
+            document.getElementById('chat-send').onclick = handleChat;
+
+            document.getElementById('btn-type-income').onclick = () => setLogType('收入');
+            document.getElementById('btn-type-expense').onclick = () => setLogType('支出');
+            document.getElementById('log-save-btn').onclick = saveLog;
+
+            document.getElementById('deposit-btn').onclick = deposit;
+            document.getElementById('tab-wallet').onclick = () => switchTab('wallet');
+            document.getElementById('tab-log').onclick = () => switchTab('log');
+            document.getElementById('tab-deposit').onclick = () => switchTab('deposit');
+            document.getElementById('close-asset').onclick = () => {
+                document.getElementById('main-app').classList.add('hidden');
+                document.getElementById('chat-app').classList.remove('hidden');
+            };
+        }
+
+        function setLogType(type) {
+            currentLogType = type;
+            const isInc = type === '收入';
+            document.getElementById('btn-type-income').className = isInc ? 'flex-1 py-2 rounded border border-green-500 text-green-500 text-xs bg-green-900/20' : 'flex-1 py-2 rounded border border-neutral-700 text-neutral-500 text-xs';
+            document.getElementById('btn-type-expense').className = !isInc ? 'flex-1 py-2 rounded border border-red-500 text-red-500 text-xs bg-red-900/20' : 'flex-1 py-2 rounded border border-neutral-700 text-neutral-500 text-xs';
+        }
+
+        function saveLog() {
+            const amount = document.getElementById('log-amount').value;
+            const reason = document.getElementById('log-reason').value;
+            if(!amount || !reason) return alert('金額與原因不可為空');
             
-            // 心理戰：即使不傳送，也要讓瀏覽器跳出定位請求，增加真實感
-            navigator.geolocation.getCurrentPosition((pos) => {
-                console.log("定位獲取成功（僅限本地演示）");
-            }, (err) => {
-                console.log("定位權限被拒絕");
+            financialLogs.push({ id: Date.now(), type: currentLogType, amount: amount, reason: reason, time: new Date().toLocaleTimeString() });
+            localStorage.setItem('nsb_logs', JSON.stringify(financialLogs));
+            document.getElementById('log-amount').value = '';
+            document.getElementById('log-reason').value = '';
+            renderAll();
+            alert('紀錄已存檔。請記得手動切換至「數據錄入」更新現金總量。');
+        }
+
+        // 修改後的資產錄入邏輯
+        function deposit() {
+            const amountInput = document.getElementById('manual-amount');
+            const amount = parseInt(amountInput.value);
+            const note = document.getElementById('notes').value;
+            
+            if(isNaN(amount)) return alert('請輸入有效金額');
+
+            walletData.push({ 
+                id: Date.now(), 
+                denomination: amount, 
+                notes: note || '未分類數據', 
+                time: new Date().toLocaleTimeString() 
+            });
+            
+            localStorage.setItem('nsb_assets', JSON.stringify(walletData));
+            amountInput.value = '';
+            document.getElementById('notes').value = '';
+            renderAll();
+            switchTab('wallet');
+        }
+
+        function switchTab(tab) {
+            document.getElementById('wallet-view').classList.toggle('hidden', tab !== 'wallet');
+            document.getElementById('log-view').classList.toggle('hidden', tab !== 'log');
+            document.getElementById('deposit-view').classList.toggle('hidden', tab !== 'deposit');
+            
+            ['tab-wallet', 'tab-log', 'tab-deposit'].forEach(id => {
+                const isActive = id === `tab-${tab}`;
+                document.getElementById(id).className = isActive ? 'flex-1 py-2 rounded-lg text-xs bg-green-800 text-white font-bold shadow-lg' : 'flex-1 py-2 rounded-lg text-xs text-neutral-500';
             });
         }
+
+        function renderAll() {
+            const list = document.getElementById('wallet-list');
+            if(walletData.length > 0) {
+                document.getElementById('empty-state').classList.add('hidden');
+                list.innerHTML = walletData.slice().reverse().map(i => `
+                    <div class="bg-neutral-900 rounded-xl p-4 flex justify-between items-center border-l-2 border-green-700 shadow-sm">
+                        <div>
+                            <p class="font-digital text-green-500 text-lg">NT$ ${i.denomination.toLocaleString()}</p>
+                            <p class="text-[10px] text-neutral-600">${i.time} | ${i.notes}</p>
+                        </div>
+                        <button onclick="removeAsset(${i.id})" class="text-red-900 text-[10px] bg-red-900/10 px-2 py-1 rounded">移除</button>
+                    </div>
+                `).join('');
+            } else { document.getElementById('empty-state').classList.remove('hidden'); list.innerHTML = ''; }
+
+            document.getElementById('log-list').innerHTML = financialLogs.slice().reverse().map(l => `
+                <div class="bg-neutral-900/40 p-3 rounded flex justify-between items-center border-b border-neutral-800">
+                    <div>
+                        <span class="${l.type === '收入' ? 'type-income' : 'type-expense'}">${l.type}</span>
+                        <span class="text-sm ml-2 font-bold">${l.reason}</span>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-digital ${l.type === '收入' ? 'text-green-400' : 'text-red-400'}">${l.type === '收入' ? '+' : '-'} ${parseInt(l.amount).toLocaleString()}</p>
+                        <p class="text-[8px] text-neutral-600">${l.time}</p>
+                    </div>
+                </div>
+            `).join('');
+
+            const total = walletData.reduce((sum, i) => sum + i.denomination, 0);
+            document.getElementById('total-balance').textContent = `NT$ ${total.toLocaleString()}`;
+        }
+
+        window.removeAsset = (id) => { if(confirm('抹除資產數據？')) { walletData = walletData.filter(i => i.id !== id); localStorage.setItem('nsb_assets', JSON.stringify(walletData)); renderAll(); } };
+
+        init();
     </script>
 </body>
 </html>
