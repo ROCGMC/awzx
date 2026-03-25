@@ -3,7 +3,7 @@ const fs = require('fs');
 
 // --- 變數宣告 ---
 // 版本V2.1 已發pr
-var NAS_PATH = "//192.168.71.200/PN/XCIF.js"; // 假設正確 IP 為 200
+var NAS_PATH = "//192.168.71.200/PN/XCIF.js";
 var XCIF_RETRY = 5; 
 var XCIF_SAVE_LOCK = 0; 
 // ----------------------
